@@ -404,8 +404,18 @@ jobs:
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: |
+        # A branch's first push has github.event.before = 40 zeros, and a
+        # rewritten history can name a commit GitHub no longer has: check, as
+        # the prepare job does, that the base is a commit before checking it out.
         if [ -z "$BASE_SHA" ]; then
           echo "No base commit for this event; not comparing against one."
+        elif [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+          echo "No base commit on a branch's first push; not comparing against one."
+        elif ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "The base reference is not a commit SHA; not comparing against it."
+        elif ! git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" \
+           || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+          echo "Base commit $BASE_SHA is not available; not comparing against it."
         elif [ ! -f tests/results/mismatches_github_gnu.json ]; then
           echo "No hash mismatches were recorded; nothing to compare."
         else
@@ -707,8 +717,18 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
+          # A branch's first push has github.event.before = 40 zeros, and a
+          # rewritten history can name a commit GitHub no longer has: check, as
+          # the prepare job does, that the base is a commit before checking it out.
           if [ -z "$BASE_SHA" ]; then
             echo "No base commit for this event; not comparing against one."
+          elif [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit on a branch's first push; not comparing against one."
+          elif ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "The base reference is not a commit SHA; not comparing against it."
+          elif ! git fetch --quiet --no-tags --depth=1 origin "$BASE_SHA" \
+             || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "Base commit $BASE_SHA is not available; not comparing against it."
           elif [ ! -f tests/results/mismatches_github_ifx.json ]; then
             echo "No hash mismatches were recorded; nothing to compare."
           else
