@@ -56,16 +56,27 @@ contains
 
 
   function CSF(sc, theta_s,theta_b)
+    use, intrinsic :: iso_c_binding, only: c_double
     implicit none
     real(kind=8) CSF, sc, theta_s,theta_b,csrf
+    interface
+      function expm1(x) bind(C, name='expm1')  ! C99 libm: exp(x)-1
+        import :: c_double                      ! without cancellation
+        real(c_double), value :: x
+        real(c_double) :: expm1
+      end function expm1
+    end interface
 
+    ! Algebraically equal to (1-cosh(theta_s*sc))/(cosh(theta_s)-1) and
+    ! (exp(theta_b*csrf)-1)/(1-exp(-theta_b)), without their cancellation
+    ! for small theta_s, theta_b (cosh(x)-1 = 2*sinh(x/2)**2).
     if (theta_s > 0.D0) then
-      csrf=(1.D0-cosh(theta_s*sc))/(cosh(theta_s)-1.D0)
+      csrf=-(sinh(0.5D0*theta_s*sc)/sinh(0.5D0*theta_s))**2
     else
       csrf=-sc**2                           ! Reference: This form of
     endif                                   ! CSF corresponds exactly
     if (theta_b > 0.D0) then
-      CSF=(exp(theta_b*csrf)-1.D0)/(1.D0-exp(-theta_b))
+      CSF=expm1(theta_b*csrf)/(-expm1(-theta_b))
     else
       CSF=csrf                              ! to Eq.(2.4_8) from SM2009
     endif                                   ! article published in
