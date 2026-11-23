@@ -48,6 +48,7 @@ on:
   push:
     branches:
       - main
+      - rlt-cstar/ci-009  # fork CI for RLT-CSTAR-009 only
   pull_request:
     branches: ['*']
 
@@ -77,6 +78,10 @@ env:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Fork CI (RLT-CSTAR-009): read-only default token.
+permissions:
+  contents: read
 
 jobs:
   prepare:
@@ -175,6 +180,15 @@ jobs:
           if [ "$build_gnu" = "true" ] && [ "$can_push" = "true" ]; then gnu_image="$gnu_built_ref"; fi
           if [ "$build_ifx" = "true" ] && [ "$can_push" = "true" ]; then ifx_image="$ifx_built_ref"; fi
 
+          # Fork CI (RLT-CSTAR-009, not for upstream): outside CWorthy-ocean never
+          # build an image or push to ghcr.io/cworthy-ocean; test against the
+          # published :latest images, read-only. An empty or unknown repository
+          # name also takes this branch.
+          if [ "$THIS_REPO" != "CWorthy-ocean/ucla-roms" ]; then
+            build_gnu=false; build_ifx=false; can_push=false
+            gnu_image="$GNU_IMG:latest"; ifx_image="$IFX_IMG:latest"
+          fi
+
           {
             echo "build_gnu=$build_gnu"
             echo "build_ifx=$build_ifx"
@@ -195,7 +209,7 @@ jobs:
 
   build_gnu:
     needs: prepare
-    if: ${{ needs.prepare.outputs.build_gnu == 'true' }}
+    if: ${{ github.repository == 'CWorthy-ocean/ucla-roms' && needs.prepare.outputs.build_gnu == 'true' }}  # fork CI: never in a fork
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -207,13 +221,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
-        if: ${{ needs.prepare.outputs.can_push == 'true' }}
+        if: ${{ github.repository == 'CWorthy-ocean/ucla-roms' && (needs.prepare.outputs.can_push == 'true') }}  # fork CI: never in a fork
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push gnu image
+        if: github.repository == 'CWorthy-ocean/ucla-roms'  # fork CI: never in a fork
         uses: docker/build-push-action@v6
         with:
           context: environments/Containerfiles
@@ -228,7 +243,7 @@ jobs:
 
   build_ifx:
     needs: prepare
-    if: ${{ needs.prepare.outputs.build_ifx == 'true' }}
+    if: ${{ github.repository == 'CWorthy-ocean/ucla-roms' && needs.prepare.outputs.build_ifx == 'true' }}  # fork CI: never in a fork
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -240,13 +255,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
-        if: ${{ needs.prepare.outputs.can_push == 'true' }}
+        if: ${{ github.repository == 'CWorthy-ocean/ucla-roms' && (needs.prepare.outputs.can_push == 'true') }}  # fork CI: never in a fork
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push ifx image
+        if: github.repository == 'CWorthy-ocean/ucla-roms'  # fork CI: never in a fork
         uses: docker/build-push-action@v6
         with:
           context: environments/Containerfiles
@@ -738,12 +754,13 @@ jobs:
     # Delete the throwaway :ci-<run_id> tags pushed for a PR. Best-effort: a
     # failure here never fails the run.
     needs: [prepare, build_gnu, build_ifx, test_gnu, compile_gnu, test_ifx, compile_ifx]
-    if: ${{ always() && github.event_name == 'pull_request' && needs.prepare.outputs.can_push == 'true' }}
+    if: ${{ github.repository == 'CWorthy-ocean/ucla-roms' && always() && github.event_name == 'pull_request' && needs.prepare.outputs.can_push == 'true' }}  # fork CI: never in a fork
     runs-on: ubuntu-latest
     permissions:
       packages: write
     steps:
       - name: Delete ephemeral CI image tags
+        if: github.repository == 'CWorthy-ocean/ucla-roms'  # fork CI: never in a fork
         continue-on-error: true
         shell: bash
         env:
